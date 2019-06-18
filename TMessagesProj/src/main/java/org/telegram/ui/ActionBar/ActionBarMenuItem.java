@@ -9,14 +9,18 @@
 package org.telegram.ui.ActionBar;
 
 import android.content.Context;
+import android.graphics.Color;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffColorFilter;
 import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
+import android.graphics.drawable.ShapeDrawable;
+import android.graphics.drawable.shapes.RoundRectShape;
 import android.os.Build;
 import android.text.Editable;
 import android.text.TextUtils;
 import android.text.TextWatcher;
+import android.util.DisplayMetrics;
 import android.util.TypedValue;
 import android.view.ActionMode;
 import android.view.Gravity;
@@ -34,6 +38,9 @@ import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.Toast;
+
+import androidx.appcompat.widget.TooltipCompat;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.LocaleController;
@@ -41,6 +48,8 @@ import org.telegram.messenger.R;
 import org.telegram.ui.Components.CloseProgressDrawable2;
 import org.telegram.ui.Components.EditTextBoldCursor;
 import org.telegram.ui.Components.LayoutHelper;
+
+import java.util.Arrays;
 
 public class ActionBarMenuItem extends FrameLayout {
 
@@ -88,6 +97,8 @@ public class ActionBarMenuItem extends FrameLayout {
     private int[] location;
     private View selectedMenuView;
     private Runnable showMenuRunnable;
+    private Runnable showTooltipRunnable;
+    private long touchDownTime;
     private int subMenuOpenSide;
     private int yOffset;
     private ActionBarMenuItemDelegate delegate;
@@ -101,6 +112,8 @@ public class ActionBarMenuItem extends FrameLayout {
     private int additionalOffset;
     private boolean longClickEnabled = true;
     private boolean animateClear = true;
+
+    private static long LONG_PRESS_TOOLTIP_DURATION = 500L;
 
     public ActionBarMenuItem(Context context, ActionBarMenu menu, int backgroundColor, int iconColor) {
         super(context);
@@ -124,6 +137,8 @@ public class ActionBarMenuItem extends FrameLayout {
     @Override
     public boolean onTouchEvent(MotionEvent event) {
         if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+            touchDownTime = System.currentTimeMillis();
+
             if (longClickEnabled && hasSubMenu() && (popupWindow == null || popupWindow != null && !popupWindow.isShowing())) {
                 showMenuRunnable = () -> {
                     if (getParent() != null) {
@@ -132,6 +147,12 @@ public class ActionBarMenuItem extends FrameLayout {
                     toggleSubMenu();
                 };
                 AndroidUtilities.runOnUIThread(showMenuRunnable, 200);
+            } else if (longClickEnabled) {
+                CharSequence tooltipText = getContentDescription();
+                if (!TextUtils.isEmpty(tooltipText)) {
+                    showTooltipRunnable = () -> { showTooltip(tooltipText); };
+                    AndroidUtilities.runOnUIThread(showTooltipRunnable, LONG_PRESS_TOOLTIP_DURATION);
+                }
             }
         } else if (event.getActionMasked() == MotionEvent.ACTION_MOVE) {
             if (hasSubMenu() && (popupWindow == null || popupWindow != null && !popupWindow.isShowing())) {
@@ -192,6 +213,27 @@ public class ActionBarMenuItem extends FrameLayout {
                 selectedMenuView = null;
             }
         }
+
+        final int action = event.getActionMasked();
+        if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+            if (showTooltipRunnable != null) {
+                AndroidUtilities.cancelRunOnUIThread(showTooltipRunnable);
+                showTooltipRunnable = null;
+            }
+
+            if (action == MotionEvent.ACTION_UP) {
+                long delta = System.currentTimeMillis() - touchDownTime;
+                if (delta >= LONG_PRESS_TOOLTIP_DURATION) {
+                    // We have shown a tooltip. So gracefully prevent default onClickListener from triggering
+                    MotionEvent mock = MotionEvent.obtain(event);
+                    mock.setAction(MotionEvent.ACTION_CANCEL);
+                    super.onTouchEvent(mock);
+                    mock.recycle();
+                    return true;
+                }
+            }
+        }
+
         return super.onTouchEvent(event);
     }
 
@@ -212,6 +254,60 @@ public class ActionBarMenuItem extends FrameLayout {
 
     public void setLayoutInScreen(boolean value) {
         layoutInScreen = value;
+    }
+
+    private void showTooltip(CharSequence text) {
+        int sidePadding = AndroidUtilities.dp(16.0f);
+        int verticalPadding = AndroidUtilities.dp(6.5f);
+        float cornerRadius = AndroidUtilities.dp(2.0f);
+        float[] rectRadii = new float[8];
+        Arrays.fill(rectRadii, cornerRadius);
+
+        ShapeDrawable backgroundDrawable = new ShapeDrawable(new RoundRectShape(rectRadii, null, null));
+        backgroundDrawable.getPaint().setColor(0xe6616161); // 0xe6FFFFFF
+
+        TextView textView = new TextView(getContext());
+        textView.setText(text);
+        textView.setTextColor(Color.WHITE);
+        textView.setTextSize(14.0f);
+        textView.setPadding(sidePadding, verticalPadding, sidePadding, verticalPadding);
+        textView.setBackground(backgroundDrawable);
+
+        Rect frame = new Rect(); // A bounding frame where we are going to show our tooltip
+        View root = getRootView();
+        if (root != null && root != this) {
+            root.getWindowVisibleDisplayFrame(frame);
+        } else {
+            DisplayMetrics metrics = getResources().getDisplayMetrics();
+            frame.set(0, 0, metrics.widthPixels, metrics.heightPixels);
+        }
+
+        frame.left += sidePadding;
+        frame.right -= sidePadding;
+
+        int[] position = new int[2];
+        getLocationOnScreen(position);
+
+        position[1] += getHeight() + AndroidUtilities.dp(8.0f) - frame.top;
+
+        textView.measure(MeasureSpec.makeMeasureSpec(frame.width(), MeasureSpec.AT_MOST),
+                MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED));
+
+        int textWidth = textView.getMeasuredWidth();
+        position[0] += getWidth() / 2 - textWidth / 2;
+
+        if (position[0] < frame.left) {
+            position[0] = frame.left;
+        }
+
+        if (position[0] > frame.right - textWidth) {
+            position[0] = frame.right - textWidth;
+        }
+
+        Toast toast = new Toast(getContext());
+        toast.setView(textView);
+        toast.setGravity(Gravity.LEFT | Gravity.TOP, position[0], position[1]);
+        toast.show();
     }
 
     private void createPopupLayout() {
