@@ -588,8 +588,8 @@ public class GroupCreateActivity extends BaseFragment implements NotificationCen
                         listView.setFastScrollVisible(false);
                         listView.setVerticalScrollBarEnabled(true);
                         emptyView.setText(LocaleController.getString("NoResult", R.string.NoResult));
-                        emptyView.showProgress();
                     }
+                    emptyView.showProgress();
                     adapter.searchDialogs(editText.getText().toString());
                 } else {
                     closeSearch();
@@ -1079,6 +1079,7 @@ public class GroupCreateActivity extends BaseFragment implements NotificationCen
                 @Override
                 public void onDataSetChanged() {
                     notifyDataSetChanged();
+                    emptyView.showTextView();
                 }
 
                 @Override
