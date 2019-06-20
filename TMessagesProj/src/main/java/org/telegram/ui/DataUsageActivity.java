@@ -296,7 +296,7 @@ public class DataUsageActivity extends BaseFragment {
                         }
                         if (maybeStartTracking && !startedTracking) {
                             float touchSlop = AndroidUtilities.getPixelsInCM(0.3f, true);
-                            if (Math.abs(dx) >= touchSlop && Math.abs(dx) / 3 > dy) {
+                            if (Math.abs(dx) >= touchSlop && Math.abs(dx) > dy) {
                                 prepareForMoving(ev, dx < 0);
                             }
                         } else if (startedTracking) {
