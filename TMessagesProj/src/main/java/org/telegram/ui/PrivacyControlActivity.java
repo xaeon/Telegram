@@ -310,6 +310,7 @@ public class PrivacyControlActivity extends BaseFragment implements Notification
         doneButton.setVisibility(visibility);
 
         listAdapter = new ListAdapter(context);
+        listAdapter.setHasStableIds(true);
 
         fragmentView = new FrameLayout(context);
         FrameLayout frameLayout = (FrameLayout) fragmentView;
@@ -726,6 +727,39 @@ public class PrivacyControlActivity extends BaseFragment implements Notification
         @Override
         public int getItemCount() {
             return rowCount;
+        }
+
+        @Override
+        public long getItemId(int position) {
+            if (position == messageRow) {
+                return 1;
+            } else if (position == sectionRow) {
+                return 2;
+            } else if (position == everybodyRow) {
+                return 3;
+            } else if (position == myContactsRow) {
+                return 4;
+            } else if (position == nobodyRow) {
+                return 5;
+            } else if (position == detailRow) {
+                return 6;
+            } else if (position == shareSectionRow) {
+                return 7;
+            } else if (position == alwaysShareRow) {
+                return 8;
+            } else if (position == neverShareRow) {
+                return 9;
+            } else if (position == shareDetailRow) {
+                return 10;
+            } else if (position == p2pSectionRow) {
+                return 11;
+            } else if (position == p2pRow) {
+                return 12;
+            } else if (position == p2pDetailRow) {
+                return 13;
+            } else {
+                throw new IllegalArgumentException("Unknown row type " + position);
+            }
         }
 
         @Override
